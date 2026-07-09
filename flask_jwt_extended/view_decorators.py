@@ -108,8 +108,6 @@ def verify_jwt_in_request(
         g._jwt_extended_jwt_location = None
         return None
 
-    # Save these at the very end so that they are only saved in the requet
-    # context if the token is valid and all callbacks succeed
     g._jwt_extended_jwt_user = _load_user(jwt_header, jwt_data)
     g._jwt_extended_jwt_header = jwt_header
     g._jwt_extended_jwt = jwt_data
@@ -161,15 +159,6 @@ def jwt_required(
         revocation status of the token will be checked.
     """
 
-    def wrapper(fn):
-        @wraps(fn)
-        def decorator(*args, **kwargs):
-            verify_jwt_in_request(
-                optional, fresh, refresh, locations, verify_type, skip_revocation_check
-            )
-            return current_app.ensure_sync(fn)(*args, **kwargs)
-
-        return decorator
 
     return wrapper
 
@@ -186,48 +175,6 @@ def _load_user(jwt_header: dict, jwt_data: dict) -> Optional[dict]:
     return {"loaded_user": user}
 
 
-def _decode_jwt_from_headers() -> Tuple[str, None]:
-    header_name = config.header_name
-    header_type = config.header_type
-
-    # Verify we have the auth header
-    auth_header = request.headers.get(header_name, "").strip().strip(",")
-    if not auth_header:
-        raise NoAuthorizationError(f"Missing {header_name} Header")
-
-    # Make sure the header is in a valid format that we are expecting, ie
-    # <HeaderName>: <HeaderType(optional)> <JWT>.
-    #
-    # Also handle the fact that the header that can be comma delimited, ie
-    # <HeaderName>: <field> <value>, <field> <value>, etc...
-    if header_type:
-        field_values = split(r",\s*", auth_header)
-        jwt_headers = [s for s in field_values if s and s.split()[0] == header_type]
-        if len(jwt_headers) != 1:
-            msg = (
-                f"Missing '{header_type}' type in '{header_name}' header. "
-                f"Expected '{header_name}: {header_type} <JWT>'"
-            )
-            raise NoAuthorizationError(msg)
-
-        parts = jwt_headers[0].split()
-        if len(parts) != 2:
-            msg = (
-                f"Bad {header_name} header. "
-                f"Expected '{header_name}: {header_type} <JWT>'"
-            )
-            raise InvalidHeaderError(msg)
-
-        encoded_token = parts[1]
-    else:
-        parts = auth_header.split()
-        if len(parts) != 1:
-            msg = f"Bad {header_name} header. Expected '{header_name}: <JWT>'"
-            raise InvalidHeaderError(msg)
-
-        encoded_token = parts[0]
-
-    return encoded_token, None
 
 
 def _decode_jwt_from_cookies(refresh: bool) -> Tuple[str, Optional[str]]:
@@ -256,22 +203,6 @@ def _decode_jwt_from_cookies(refresh: bool) -> Tuple[str, Optional[str]]:
     return encoded_token, csrf_value
 
 
-def _decode_jwt_from_query_string() -> Tuple[str, None]:
-    param_name = config.query_string_name
-    prefix = config.query_string_value_prefix
-
-    value = request.args.get(param_name)
-    if not value:
-        raise NoAuthorizationError(f"Missing '{param_name}' query paramater")
-
-    if not value.startswith(prefix):
-        raise InvalidQueryParamError(
-            f"Invalid value for query parameter '{param_name}'. "
-            f"Expected the value to start with '{prefix}'"
-        )
-
-    encoded_token = value[len(prefix) :]  # noqa: E203
-    return encoded_token, None
 
 
 def _decode_jwt_from_json(refresh: bool) -> Tuple[str, None]:
@@ -302,15 +233,12 @@ def _decode_jwt_from_request(
     verify_type: bool = True,
     skip_revocation_check: bool = False,
 ) -> Tuple[dict, dict, str]:
-    # Figure out what locations to look for the JWT in this request
     if isinstance(locations, str):
         locations = [locations]
 
     if not locations:
         locations = config.token_location
 
-    # Get the decode functions in the order specified by locations.
-    # Each entry in this list is a tuple (<location>, <encoded-token-function>)
     get_encoded_token_functions = []
     for location in locations:
         if location == "cookies":
@@ -330,8 +258,6 @@ def _decode_jwt_from_request(
         else:
             raise RuntimeError(f"'{location}' is not a valid location")
 
-    # Try to find the token from one of these locations. It only needs to exist
-    # in one place to be valid (not every location).
     errors = []
     decoded_token = None
     for location, get_encoded_token_function in get_encoded_token_functions:
@@ -344,8 +270,6 @@ def _decode_jwt_from_request(
         except NoAuthorizationError as e:
             errors.append(str(e))
 
-    # Do some work to make a helpful and human readable error message if no
-    # token was found in any of the expected locations.
     if not decoded_token:
         if len(locations) > 1:
             err_msg = "Missing JWT in {start_locs} or {end_locs} ({details})".format(
@@ -357,7 +281,6 @@ def _decode_jwt_from_request(
         else:
             raise NoAuthorizationError(errors[0])
 
-    # Additional verifications provided by this extension
     if verify_type:
         verify_token_type(decoded_token, refresh)
 

@@ -1,0 +1,32 @@
+{
+  "repo": "vimalloc/flask-jwt-extended",
+  "reference_commit": "645dad035bc5a1ced5d31f274b34c3b8fc230272",
+  "setup": {
+    "install": "pip install -e \".\"",
+    "packages": "",
+    "pip_packages": [
+      "black==23.12.1",
+      "cryptography==42.0.4",
+      "Flask>=2.0,<4.0",
+      "pre-commit==3.6.0",
+      "PyJWT>=2.11.0,<3.0",
+      "pytest",
+      "pytest-json-report",
+      "tox==4.12.1",
+      "Werkzeug>=0.14"
+    ],
+    "pre_install": [
+      "apt-get install -y libffi-dev libssl-dev"
+    ],
+    "python": "3.10",
+    "specification": "https://flask-jwt-extended.readthedocs.io/en/stable/",
+    "version_source": "setup.py:python_requires",
+    "version_conflicts": [],
+    "system_deps_hint": []
+  },
+  "test": {
+    "test_cmd": "pytest",
+    "test_dir": "tests"
+  },
+  "_schema": "kaiju-breadcrumb/1"
+}

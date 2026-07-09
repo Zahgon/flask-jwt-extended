@@ -15,8 +15,6 @@ try:
 
     HAS_JSON_PROVIDER = True
 except ModuleNotFoundError:  # pragma: no cover
-    # The flask.json.provider module was added in Flask 2.2.
-    # Further details are handled in get_json_encoder.
     HAS_JSON_PROVIDER = False
 
 
@@ -67,15 +65,8 @@ def custom_verification_for_token(jwt_header: dict, jwt_data: dict) -> None:
 
 
 class JSONEncoder(json.JSONEncoder):
-    """A JSON encoder which uses the app.json_provider_class for the default"""
 
-    def default(self, o: Any) -> Any:
-        # If the registered JSON provider does not implement a default classmethod
-        # use the method defined by the DefaultJSONProvider
-        default = getattr(
-            current_app.json_provider_class, "default", DefaultJSONProvider.default
-        )
-        return default(o)
+    pass
 
 
 def get_json_encoder(app: Flask) -> Type[json.JSONEncoder]:
